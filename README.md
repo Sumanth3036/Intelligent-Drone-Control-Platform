@@ -43,41 +43,39 @@ The system captures flight data, trains ML models to predict orientation errors,
 
 > **Note**: Add your screenshots and demo videos to the `assets/` folder and update the paths below.
 
+
+Mavic 2 Pro drone 
+<img width="621" height="416" alt="Screenshot 2025-06-14 110740" src="https://github.com/user-attachments/assets/6700917e-fb14-4498-91c6-d6373759eac4" />
 #### Webots Simulation Environment
-![Webots Simulation](assets/webots-simulation.png)
-*Mavic 2 Pro drone in the Webots simulation environment*
+<img width="1904" height="770" alt="Screenshot 2025-07-25 133724" src="https://github.com/user-attachments/assets/70957d87-d774-48d2-b9e1-ae45c9cec9e6" />
+
+
+
 
 #### Real-Time Dashboard
-![Dashboard Interface](assets/dashboard-screenshot.png)
-*Live telemetry dashboard showing position, orientation, and ML predictions*
+<img width="1878" height="902" alt="Screenshot 2025-07-25 133155" src="https://github.com/user-attachments/assets/a4f273ff-9092-425a-9733-b6209e5f2620" />
+
 
 #### Flight Visualization
-![Flight Path](assets/flight-trajectory.png)
-*3D flight path tracking with real-time position updates*
+<img width="776" height="559" alt="Screenshot 2025-06-14 115501" src="https://github.com/user-attachments/assets/602ad95c-5aab-41de-a8f3-eafc0f52e205" />
+
 
 ### 📊 Key Outputs
 
-#### ML Model Performance
-![ML Performance](assets/ml-model-performance.png)
-*Orientation prediction accuracy and error metrics*
+#### Webots Output
+<img width="894" height="235" alt="Screenshot 2025-06-14 115519" src="https://github.com/user-attachments/assets/b4b56347-62ca-46e3-becd-207800673dd7" />
+
 
 #### Telemetry Streaming
-![Telemetry Data](assets/telemetry-output.png)
-*Real-time sensor data streaming via WebSocket*
+<img width="1901" height="916" alt="Screenshot 2025-06-23 100211" src="https://github.com/user-attachments/assets/965cc5af-1ade-4eb5-988f-ae70da0d7325" />
 
-#### Stability Analysis
-![Stability Index](assets/stability-graph.png)
-*Flight stability monitoring over time*
 
-### 🎥 Demo Video
 
-> **Coming Soon**: Full demonstration video showing:
-> - Drone takeoff and autonomous flight
-> - Real-time dashboard updates
-> - ML model predictions in action
-> - Keyboard control demonstration
+#### ML Analysis
+<img width="855" height="483" alt="Screenshot 2025-06-23 094620" src="https://github.com/user-attachments/assets/d47709cc-f6e4-4bbc-b34c-c1479b4b6809" />
 
----
+
+
 
 ## ✨ Features
 
