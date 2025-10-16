@@ -44,7 +44,7 @@ The system captures flight data, trains ML models to predict orientation errors,
 > **Note**: Add your screenshots and demo videos to the `assets/` folder and update the paths below.
 
 
-Mavic 2 Pro drone 
+#### Mavic 2 Pro drone 
 <img width="621" height="416" alt="Screenshot 2025-06-14 110740" src="https://github.com/user-attachments/assets/6700917e-fb14-4498-91c6-d6373759eac4" />
 #### Webots Simulation Environment
 <img width="1904" height="770" alt="Screenshot 2025-07-25 133724" src="https://github.com/user-attachments/assets/70957d87-d774-48d2-b9e1-ae45c9cec9e6" />
