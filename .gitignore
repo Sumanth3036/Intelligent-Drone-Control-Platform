@@ -67,3 +67,10 @@ Thumbs.db
 # CSV data files (keep only essential ones)
 # Uncomment if you want to exclude all CSV files
 # *.csv
+
+# Assets folder - keep screenshots and images
+!assets/
+!assets/*.png
+!assets/*.jpg
+!assets/*.gif
+!assets/*.svg

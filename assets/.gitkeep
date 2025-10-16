@@ -1,0 +1,10 @@
+# This file ensures the assets directory is tracked by git
+# Place your screenshots and demo images here:
+# - webots-simulation.png
+# - dashboard-screenshot.png
+# - flight-trajectory.png
+# - ml-model-performance.png
+# - telemetry-output.png
+# - stability-graph.png
+# - stability-results.png
+# - training-results.png
