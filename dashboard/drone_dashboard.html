@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drone ML Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            background-color: #f5f5f5;
+        }
+        
+        .dashboard { 
+            display: grid; 
+            gap: 20px; 
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .status-panel { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 15px; 
+            margin-bottom: 20px;
+        }
+        
+        .status-item { 
+            background: white; 
+            padding: 15px; 
+            border-radius: 8px; 
+            text-align: center; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #007bff;
+        }
+        
+        .status-item.connected { border-left-color: #28a745; }
+        .status-item.disconnected { border-left-color: #dc3545; }
+        
+        .status-label {
+            font-weight: bold;
+            color: #666;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        
+        .status-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+        }
+        
+        .chart-container { 
+            height: 350px; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .chart-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+            text-align: center;
+        }
+        
+        .connection-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 15px;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .connection-indicator.connected { background-color: #28a745; }
+        .connection-indicator.disconnected { background-color: #dc3545; }
+        .connection-indicator.connecting { background-color: #ffc107; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="connection-indicator" id="connectionIndicator">Connecting...</div>
+    
+    <div class="dashboard">
+        <h1>🚁 Drone ML Monitoring Dashboard</h1>
+        
+        <div class="status-panel">
+            <div class="status-item" id="connectionStatus">
+                <div class="status-label">Connection</div>
+                <div class="status-value" id="connStatus">Disconnected</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Simulation Time</div>
+                <div class="status-value"><span id="simTime">0.0</span>s</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Altitude</div>
+                <div class="status-value"><span id="altitude">0.0</span>m</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Roll</div>
+                <div class="status-value"><span id="roll">0.0</span>°</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Pitch</div>
+                <div class="status-value"><span id="pitch">0.0</span>°</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Yaw</div>
+                <div class="status-value"><span id="yaw">0.0</span>°</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Stability Index</div>
+                <div class="status-value"><span id="stability">0.0</span></div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Air Drift</div>
+                <div class="status-value"><span id="airDrift">0.0</span>m/s</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">ML Active</div>
+                <div class="status-value" id="mlActive">No</div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="chart-container">
+                <div class="chart-title">Roll vs Time</div>
+                <canvas id="rollChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">Pitch vs Time</div>
+                <canvas id="pitchChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">ML Prediction Errors</div>
+                <canvas id="mlChart"></canvas>
+            </div>
+            
+            <div class="chart-container">
+                <div class="chart-title">Stability vs Air Drift</div>
+                <canvas id="stabilityChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        const maxPoints = 100;
+        const charts = {};
+        let ws = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 10;
+        let reconnectTimeout = null;
+
+        // Chart configuration
+        const chartConfig = {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'linear',
+                    position: 'bottom',
+                    title: { display: true }
+                },
+                y: {
+                    title: { display: true }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                }
+            },
+            animation: {
+                duration: 0 // Disable animations for better performance
+            }
+        };
+
+        // Create chart function
+        function createChart(canvasId, type, datasets, xAxisLabel = 'Time (s)', yAxisLabel = 'Value') {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            const config = JSON.parse(JSON.stringify(chartConfig)); // Deep copy
+            config.scales.x.title.text = xAxisLabel;
+            config.scales.y.title.text = yAxisLabel;
+            
+            charts[canvasId] = new Chart(ctx, {
+                type: type,
+                data: { datasets: datasets },
+                options: config
+            });
+        }
+
+        // Initialize all charts
+        function initializeCharts() {
+            // Roll chart
+            createChart('rollChart', 'line', [
+                { 
+                    label: 'Roll (rad)', 
+                    borderColor: 'rgb(75, 192, 192)', 
+                    backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                    data: [],
+                    fill: false,
+                    tension: 0.1
+                }
+            ], 'Time (s)', 'Roll (rad)');
+            
+            // Pitch chart
+            createChart('pitchChart', 'line', [
+                { 
+                    label: 'Pitch (rad)', 
+                    borderColor: 'rgb(54, 162, 235)', 
+                    backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                    data: [],
+                    fill: false,
+                    tension: 0.1
+                }
+            ], 'Time (s)', 'Pitch (rad)');
+            
+            // ML prediction errors
+            createChart('mlChart', 'line', [
+                { 
+                    label: 'Roll Error', 
+                    borderColor: 'rgb(255, 99, 132)', 
+                    backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                    data: [],
+                    fill: false,
+                    tension: 0.1
+                },
+                { 
+                    label: 'Pitch Error', 
+                    borderColor: 'rgb(255, 159, 64)', 
+                    backgroundColor: 'rgba(255, 159, 64, 0.1)',
+                    data: [],
+                    fill: false,
+                    tension: 0.1
+                },
+                { 
+                    label: 'Yaw Error', 
+                    borderColor: 'rgb(153, 102, 255)', 
+                    backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                    data: [],
+                    fill: false,
+                    tension: 0.1
+                }
+            ], 'Time (s)', 'Error (rad)');
+            
+            // Stability vs Air Drift scatter plot
+            createChart('stabilityChart', 'scatter', [
+                { 
+                    label: 'Stability vs Drift', 
+                    borderColor: 'rgb(75, 192, 192)', 
+                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                    data: []
+                }
+            ], 'Air Drift (m/s)', 'Stability Index');
+        }
+
+        // Update chart data
+        function updateChart(chartId, datasetIndex, newPoint) {
+            const chart = charts[chartId];
+            if (!chart) return;
+            
+            const dataset = chart.data.datasets[datasetIndex];
+            dataset.data.push(newPoint);
+            
+            // Maintain sliding window of maxPoints
+            if (dataset.data.length > maxPoints) {
+                dataset.data.shift();
+            }
+            
+            chart.update('none'); // Update without animation for better performance
+        }
+
+        // Update connection status
+        function updateConnectionStatus(status) {
+            const indicator = document.getElementById('connectionIndicator');
+            const statusElement = document.getElementById('connStatus');
+            const statusContainer = document.getElementById('connectionStatus');
+            
+            indicator.className = `connection-indicator ${status}`;
+            statusContainer.className = `status-item ${status}`;
+            
+            switch(status) {
+                case 'connected':
+                    indicator.textContent = 'Connected';
+                    statusElement.textContent = 'Connected';
+                    break;
+                case 'connecting':
+                    indicator.textContent = 'Connecting...';
+                    statusElement.textContent = 'Connecting...';
+                    break;
+                case 'disconnected':
+                    indicator.textContent = 'Disconnected';
+                    statusElement.textContent = 'Disconnected';
+                    break;
+            }
+        }
+
+        // WebSocket connection
+        function connect() {
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = null;
+            }
+
+            updateConnectionStatus('connecting');
+            
+            try {
+                ws = new WebSocket('ws://localhost:8765');
+                
+                ws.onopen = function() {
+                    console.log('WebSocket connected');
+                    updateConnectionStatus('connected');
+                    reconnectAttempts = 0;
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        // Handle different message types
+                        if (data.type === 'connection_status') {
+                            console.log('Connection status:', data.message);
+                            return;
+                        }
+                        
+                        // Update dashboard with drone data
+                        updateDashboard(data);
+                    } catch (error) {
+                        console.error('Error parsing message:', error);
+                    }
+                };
+                
+                ws.onclose = function(event) {
+                    console.log('WebSocket disconnected:', event.code, event.reason);
+                    updateConnectionStatus('disconnected');
+                    
+                    // Attempt to reconnect
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+                        console.log(`Reconnecting in ${delay/1000}s (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+                        
+                        reconnectTimeout = setTimeout(connect, delay);
+                    } else {
+                        console.error('Max reconnection attempts reached');
+                    }
+                };
+                
+                ws.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    updateConnectionStatus('disconnected');
+                };
+                
+            } catch (error) {
+                console.error('Error creating WebSocket:', error);
+                updateConnectionStatus('disconnected');
+                
+                // Retry connection
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    reconnectTimeout = setTimeout(connect, 2000);
+                }
+            }
+        }
+        
+        // Update dashboard with new data
+        function updateDashboard(data) {
+            // Safety checks for data
+            const safeValue = (value, fallback = 0) => {
+                return (value !== undefined && value !== null && !isNaN(value)) ? value : fallback;
+            };
+            
+            // Update status panel
+            document.getElementById('simTime').textContent = safeValue(data.simulation_time).toFixed(1);
+            document.getElementById('altitude').textContent = safeValue(data.altitude).toFixed(2);
+            document.getElementById('roll').textContent = (safeValue(data.filtered_roll) * 57.2958).toFixed(1); // Convert to degrees
+            document.getElementById('pitch').textContent = (safeValue(data.filtered_pitch) * 57.2958).toFixed(1); // Convert to degrees
+            document.getElementById('yaw').textContent = (safeValue(data.filtered_yaw) * 57.2958).toFixed(1); // Convert to degrees
+            document.getElementById('stability').textContent = safeValue(data.stability_index).toFixed(3);
+            document.getElementById('airDrift').textContent = safeValue(data.air_drift).toFixed(3);
+            
+            // Check if ML is active
+            const mlActive = (data.ml_roll_error !== undefined && data.ml_roll_error !== 0) ||
+                           (data.ml_pitch_error !== undefined && data.ml_pitch_error !== 0) ||
+                           (data.ml_yaw_error !== undefined && data.ml_yaw_error !== 0);
+            document.getElementById('mlActive').textContent = mlActive ? 'Yes' : 'No';
+            
+            // Update charts
+            const simTime = safeValue(data.simulation_time);
+            
+            // Roll chart
+            updateChart('rollChart', 0, {
+                x: simTime, 
+                y: safeValue(data.filtered_roll)
+            });
+            
+            // Pitch chart
+            updateChart('pitchChart', 0, {
+                x: simTime, 
+                y: safeValue(data.filtered_pitch)
+            });
+            
+            // ML prediction errors
+            updateChart('mlChart', 0, {
+                x: simTime, 
+                y: safeValue(data.ml_roll_error)
+            });
+            updateChart('mlChart', 1, {
+                x: simTime, 
+                y: safeValue(data.ml_pitch_error)
+            });
+            updateChart('mlChart', 2, {
+                x: simTime, 
+                y: safeValue(data.ml_yaw_error)
+            });
+            
+            // Stability vs Air Drift scatter plot
+            updateChart('stabilityChart', 0, {
+                x: safeValue(data.air_drift), 
+                y: safeValue(data.stability_index)
+            });
+        }
+        
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                // Page is hidden, reduce update frequency
+                console.log('Page hidden, maintaining connection');
+            } else {
+                // Page is visible, ensure connection is active
+                console.log('Page visible, checking connection');
+                if (!ws || ws.readyState !== WebSocket.OPEN) {
+                    connect();
+                }
+            }
+        });
+        
+        // Handle window beforeunload
+        window.addEventListener('beforeunload', function() {
+            if (ws) {
+                ws.close();
+            }
+        });
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Dashboard initializing...');
+            initializeCharts();
+            connect();
+            
+            // Show initial status
+            updateConnectionStatus('connecting');
+            
+            console.log('Dashboard initialized');
+        });
+        
+        // Keyboard shortcuts for testing
+        document.addEventListener('keydown', function(event) {
+            if (event.ctrlKey) {
+                switch(event.key) {
+                    case 'r':
+                        event.preventDefault();
+                        console.log('Manual reconnection triggered');
+                        if (ws) ws.close();
+                        reconnectAttempts = 0;
+                        setTimeout(connect, 100);
+                        break;
+                    case 'c':
+                        event.preventDefault();
+                        console.log('Clearing charts');
+                        Object.values(charts).forEach(chart => {
+                            chart.data.datasets.forEach(dataset => {
+                                dataset.data = [];
+                            });
+                            chart.update();
+                        });
+                        break;
+                }
+            }
+        });
+        
+        // Add some helpful console information
+        console.log('Drone Dashboard loaded');
+        console.log('Keyboard shortcuts:');
+        console.log('  Ctrl+R: Force reconnection');
+        console.log('  Ctrl+C: Clear all charts');
+    </script>
+</body>
+</html>

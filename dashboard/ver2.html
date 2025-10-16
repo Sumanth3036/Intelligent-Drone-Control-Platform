@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drone ML Advanced Error Analysis Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 25%, #16213e 50%, #0f3460 100%);
+            color: #fff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .dashboard { 
+            display: grid; 
+            gap: 20px; 
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 2.8em;
+            margin-bottom: 30px;
+            text-shadow: 0 0 20px rgba(64, 224, 255, 0.5);
+            background: linear-gradient(45deg, #ff3838, #ff6b35, #f7931e, #40e0d0, #6a5acd);
+            background-size: 400% 400%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradientShift 4s ease infinite;
+        }
+        
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            25% { background-position: 100% 0%; }
+            50% { background-position: 100% 100%; }
+            75% { background-position: 0% 100%; }
+        }
+        
+        .critical-alerts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .error-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 25px;
+            border: 2px solid transparent;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .error-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transition: left 0.8s;
+        }
+        
+        .error-panel:hover::before { left: 100%; }
+        
+        .error-panel.safe {
+            border-color: #00ff88;
+            box-shadow: 0 0 25px rgba(0, 255, 136, 0.2);
+        }
+        
+        .error-panel.warning {
+            border-color: #ffaa00;
+            box-shadow: 0 0 25px rgba(255, 170, 0, 0.3);
+            animation: warningPulse 3s ease-in-out infinite;
+        }
+        
+        .error-panel.danger {
+            border-color: #ff4444;
+            box-shadow: 0 0 30px rgba(255, 68, 68, 0.4);
+            animation: dangerPulse 2s ease-in-out infinite;
+        }
+        
+        .error-panel.critical {
+            border-color: #ff0080;
+            box-shadow: 0 0 40px rgba(255, 0, 128, 0.6);
+            animation: criticalPulse 1s ease-in-out infinite;
+        }
+        
+        @keyframes warningPulse {
+            0%, 100% { box-shadow: 0 0 25px rgba(255, 170, 0, 0.3); }
+            50% { box-shadow: 0 0 35px rgba(255, 170, 0, 0.5); }
+        }
+        
+        @keyframes dangerPulse {
+            0%, 100% { box-shadow: 0 0 30px rgba(255, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 45px rgba(255, 68, 68, 0.7); }
+        }
+        
+        @keyframes criticalPulse {
+            0%, 100% { box-shadow: 0 0 40px rgba(255, 0, 128, 0.6); }
+            50% { box-shadow: 0 0 60px rgba(255, 0, 128, 0.9); }
+        }
+        
+        .error-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .error-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .error-icon.roll { background: linear-gradient(135deg, #ff6b6b, #ff8e8e); }
+        .error-icon.pitch { background: linear-gradient(135deg, #4ecdc4, #6ee5db); }
+        .error-icon.yaw { background: linear-gradient(135deg, #45b7d1, #74c7ec); }
+        
+        .error-title {
+            font-size: 1.4em;
+            font-weight: bold;
+        }
+        
+        .error-status {
+            margin-left: auto;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .status-safe { background: rgba(0, 255, 136, 0.2); color: #00ff88; }
+        .status-warning { background: rgba(255, 170, 0, 0.2); color: #ffaa00; }
+        .status-danger { background: rgba(255, 68, 68, 0.2); color: #ff4444; }
+        .status-critical { background: rgba(255, 0, 128, 0.2); color: #ff0080; }
+        
+        .error-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .metric-item {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 12px;
+            border-radius: 10px;
+            border-left: 3px solid #40e0d0;
+        }
+        
+        .metric-label {
+            font-size: 0.85em;
+            color: #aaa;
+            margin-bottom: 5px;
+        }
+        
+        .metric-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            color: #fff;
+        }
+        
+        .consequences-section {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .consequences-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #40e0d0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .consequence-text {
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+        
+        .component-damage {
+            background: rgba(139, 0, 255, 0.1);
+            border: 1px solid rgba(139, 0, 255, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+        }
+        
+        .damage-title {
+            color: #8b00ff;
+            font-weight: bold;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .component-risk {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+        
+        .risk-bar {
+            width: 80px;
+            height: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .risk-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: all 0.5s ease;
+            position: relative;
+        }
+        
+        .risk-fill.animate {
+            animation: riskPulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes riskPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .status-grid {
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); 
+            gap: 15px; 
+            margin-bottom: 25px;
+        }
+        
+        .status-item { 
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(10px);
+            padding: 18px; 
+            border-radius: 15px; 
+            text-align: center; 
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .status-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #40e0d0, #6a5acd);
+        }
+        
+        .status-item:hover { 
+            transform: translateY(-8px); 
+            box-shadow: 0 10px 25px rgba(64, 224, 255, 0.2);
+        }
+        
+        .status-label {
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            opacity: 0.8;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-value {
+            font-size: 22px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            color: #40e0d0;
+        }
+        
+        .charts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(550px, 1fr));
+            gap: 25px;
+        }
+        
+        .chart-panel { 
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(15px);
+            padding: 25px; 
+            border-radius: 20px; 
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            height: 420px;
+            position: relative;
+        }
+        
+        .chart-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1);
+        }
+        
+        .chart-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #40e0d0;
+        }
+        
+        .connection-indicator {
+            position: fixed;
+            top: 25px;
+            right: 25px;
+            padding: 15px 25px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 14px;
+            backdrop-filter: blur(15px);
+            border: 2px solid;
+            z-index: 1000;
+            transition: all 0.3s ease;
+        }
+        
+        .connection-indicator.connected { 
+            background: rgba(0, 255, 136, 0.15); 
+            border-color: #00ff88;
+            color: #00ff88;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
+        
+        .connection-indicator.disconnected { 
+            background: rgba(255, 68, 68, 0.15);
+            border-color: #ff4444;
+            color: #ff4444;
+            box-shadow: 0 0 20px rgba(255, 68, 68, 0.3);
+        }
+        
+        .connection-indicator.connecting { 
+            background: rgba(255, 170, 0, 0.15);
+            border-color: #ffaa00;
+            color: #ffaa00;
+            animation: connectingPulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes connectingPulse {
+            0%, 100% { 
+                box-shadow: 0 0 15px rgba(255, 170, 0, 0.3);
+                transform: scale(1);
+            }
+            50% { 
+                box-shadow: 0 0 30px rgba(255, 170, 0, 0.6);
+                transform: scale(1.05);
+            }
+        }
+        
+        .notification-toast {
+            position: fixed;
+            top: 90px;
+            right: 25px;
+            background: rgba(255, 0, 128, 0.95);
+            backdrop-filter: blur(15px);
+            color: white;
+            padding: 20px 25px;
+            border-radius: 15px;
+            border: 2px solid #ff0080;
+            transform: translateX(450px);
+            transition: transform 0.4s ease;
+            z-index: 1001;
+            max-width: 350px;
+            box-shadow: 0 10px 30px rgba(255, 0, 128, 0.3);
+        }
+        
+        .notification-toast.show {
+            transform: translateX(0);
+        }
+        
+        .toast-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+        
+        .toast-message {
+            font-size: 0.95em;
+            line-height: 1.3;
+        }
+        
+        .error-timeline {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 12px;
+            margin-top: 10px;
+        }
+        
+        .timeline-title {
+            font-size: 0.9em;
+            color: #40e0d0;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .timeline-events {
+            font-size: 0.8em;
+            line-height: 1.4;
+            color: #ccc;
+        }
+        
+        .severity-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        
+        .severity-safe { background: #00ff88; }
+        .severity-warning { background: #ffaa00; }
+        .severity-danger { background: #ff4444; }
+        .severity-critical { background: #ff0080; animation: criticalBlink 1s ease-in-out infinite; }
+        
+        @keyframes criticalBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-indicator" id="connectionIndicator">Connecting...</div>
+    <div class="notification-toast" id="notificationToast">
+        <div class="toast-title" id="toastTitle">System Alert</div>
+        <div class="toast-message" id="toastMessage">Monitoring drone status...</div>
+    </div>
+    
+    <div class="dashboard">
+        <h1>🚁 Advanced Drone ML Error Analysis & Risk Assessment</h1>
+        
+        <div class="critical-alerts">
+            <!-- Roll Error Panel -->
+            <div class="error-panel safe" id="rollPanel">
+                <div class="error-header">
+                    <div class="error-icon roll">R</div>
+                    <div class="error-title">Roll Error Analysis</div>
+                    <div class="error-status status-safe" id="rollStatus">SAFE</div>
+                </div>
+                
+                <div class="error-metrics">
+                    <div class="metric-item">
+                        <div class="metric-label">Current Error</div>
+                        <div class="metric-value" id="rollError">0.000</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Peak Error</div>
+                        <div class="metric-value" id="rollPeak">0.000</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Error Rate</div>
+                        <div class="metric-value" id="rollRate">0.000/s</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Spike Count</div>
+                        <div class="metric-value" id="rollSpikes">0</div>
+                    </div>
+                </div>
+                
+                <div class="consequences-section">
+                    <div class="consequences-title">
+                        ⚡ Flight Consequences
+                    </div>
+                    <div class="consequence-text" id="rollConsequence">Stable lateral control maintained</div>
+                </div>
+                
+                <div class="component-damage">
+                    <div class="damage-title">
+                        🔧 Component Risk Assessment
+                    </div>
+                    <div class="component-risk">
+                        <span>Motor Strain:</span>
+                        <div class="risk-bar">
+                            <div class="risk-fill" id="rollMotorRisk" style="width: 5%; background: linear-gradient(90deg, #00ff88, #40e0d0);"></div>
+                        </div>
+                        <span id="rollMotorPercent">5%</span>
+                    </div>
+                    <div class="component-risk">
+                        <span>IMU Stress:</span>
+                        <div class="risk-bar">
+                            <div class="risk-fill" id="rollIMURisk" style="width: 2%; background: linear-gradient(90deg, #00ff88, #40e0d0);"></div>
+                        </div>
+                        <span id="rollIMUPercent">2%</span>
+                    </div>
+                    <div class="component-risk">
+                        <span>ESC Overload:</span>
+                        <div class="risk-bar">
+                            <div class="risk-fill" id="rollESCRisk" style="width: 3%; background: linear-gradient(90deg, #00ff88, #40e0d0);"></div>
+                        </div>
+                        <span id="rollESCPercent">3%</span>
+                    </div>
+                </div>
+                
+                <div class="error-timeline">
+                    <div class="timeline-title">Recent Error Events</div>
+                    <div class="timeline-events" id="rollTimeline">System stable - no critical events</div>
+                </div>
+            </div>
+            
+            <!-- Pitch Error Panel -->
+            <div class="error-panel safe" id="pitchPanel">
+                <div class="error-header">
+                    <div class="error-icon pitch">P</div>
+                    <div class="error-title">Pitch Error Analysis</div>
+                    <div class="error-status status-safe" id="pitchStatus">SAFE</div>
+                </div>
+                
+                <div class="error-metrics">
+                    <div class="metric-item">
+                        <div class="metric-label">Current Error</div>
+                        <div class="metric-value" id="pitchError">0.000</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Peak Error</div>
+                        <div class="metric-value" id="pitchPeak">0.000</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Error Rate</div>
+                        <div class="metric-value" id="pitchRate">0.000/s</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Spike Count</div>
+                        <div class="metric-value" id="pitchSpikes">0</div>
+                    </div>
+                </div>
+                
+                <div class="consequences-section">
+                    <div class="consequences-title">
+                        ⚡ Flight Consequences
+                    </div>
+                    <div class="consequence-text" id="pitchConsequence">Stable forward/backward control maintained</div>
+                </div>
+                
+                <div class="component-damage">
+                    <div class="damage-title">
+                        🔧 Component Risk Assessment
+                    </div>
+                    <div class="component-risk">
+                        <span>Motor Strain:</span>
+                        <div class="risk-bar">
+                            <div class="risk-fill" id="pitchMotorRisk" style="width: 5%; background: linear-gradient(90deg, #00ff88, #40e0d0);"></div>
+                        </div>
+                        <span id="pitchMotorPercent">5%</span>
+                    </div>
+                    <div class="component-risk">
+                        <span>IMU Stress:</span>
+                        <div class="risk-bar">
+                            <div class="risk-fill" id="pitchIMURisk" style="width: 2%; background: linear-gradient(90deg, #00ff88, #40e0d0);"></div>
+                        </div>
+                        <span id="pitchIMUPercent">2%</span>
+                    </div>
+                    <div class="component-risk">
+                        <span>Battery Drain:</span>
+                        <div class="risk-bar">
+                            <div class="risk-fill" id="pitchBatteryRisk" style="width: 1%; background: linear-gradient(90deg, #00ff88, #40e0d0);"></div>
+                        </div>
+                        <span id="pitchBatteryPercent">1%</span>
+                    </div>
+                </div>
+                
+                <div class="error-timeline">
+                    <div class="timeline-title">Recent Error Events</div>
+                    <div class="timeline-events" id="pitchTimeline">System stable - no critical events</div>
+                </div>
+            </div>
+            
+            <!-- Yaw Error Panel -->
+            <div class="error-panel safe" id="yawPanel">
+                <div class="error-header">
+                    <div class="error-icon yaw">Y</div>
+                    <div class="error-title">Yaw Error Analysis</div>
+                    <div class="error-status status-safe" id="yawStatus">SAFE</div>
+                </div>
+                
+                <div class="error-metrics">
+                    <div class="metric-item">
+                        <div class="metric-label">Current Error</div>
+                        <div class="metric-value" id="yawError">0.000</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Peak Error</div>
+                        <div class="metric-value" id="yawPeak">0.000</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Error Rate</div>
+                        <div class="metric-value" id="yawRate">0.000/s</div>
+                    </div>
+                    <div class="metric-item">
+                        <div class="metric-label">Spike Count</div>
+                        <div class="metric-value" id="yawSpikes">0</div>
+                    </div>
+                </div>
+                
+                <div class="consequences-section">
+                    <div class="consequences-title">
+                        ⚡ Flight Consequences
+                    </div>
+                    <div class="consequence-text" id="yawConsequence">Stable rotational control maintained</div>
+                </div>
+                
+                <div class="component-damage">
+                    <div class="damage-title">
+                        🔧 Component Risk Assessment
+                    </div>
+                    <div class="component-risk">
+                        <span>Motor Strain:</span>
+                        <div class="risk-bar">
+                            <div class="risk-fill" id="yawMotorRisk" style="width: 5%; background: linear-gradient(90deg, #00ff88, #40e0d0);"></div>
+                        </div>
+                        <span id="yawMotorPercent">5%</span>
+                    </div>
+                    <div class="component-risk">
+                        <span>Gyro Stress:</span>
+                        <div class="risk-bar">
+                            <div class="risk-fill" id="yawGyroRisk" style="width: 3%; background: linear-gradient(90deg, #00ff88, #40e0d0);"></div>
+                        </div>
+                        <span id="yawGyroPercent">3%</span>
+                    </div>
+                    <div class="component-risk">
+                        <span>Compass Error:</span>
+                        <div class="risk-bar">
+                            <div class="risk-fill" id="yawCompassRisk" style="width: 4%; background: linear-gradient(90deg, #00ff88, #40e0d0);"></div>
+                        </div>
+                        <span id="yawCompassPercent">4%</span>
+                    </div>
+                </div>
+                
+                <div class="error-timeline">
+                    <div class="timeline-title">Recent Error Events</div>
+                    <div class="timeline-events" id="yawTimeline">System stable - no critical events</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="status-grid">
+            <div class="status-item">
+                <div class="status-label">Connection</div>
+                <div class="status-value" id="connStatus">Disconnected</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Simulation Time</div>
+                <div class="status-value"><span id="simTime">0.0</span>s</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Altitude</div>
+                <div class="status-value"><span id="altitude">0.0</span>m</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Roll</div>
+                <div class="status-value"><span id="roll">0.0</span>°</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Pitch</div>
+                <div class="status-value"><span id="pitch">0.0</span>°</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Yaw</div>
+                <div class="status-value"><span id="yaw">0.0</span>°</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Stability Index</div>
+                <div class="status-value"><span id="stability">0.0</span></div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">ML Active</div>
+                <div class="status-value" id="mlActive">No</div>
+            </div>
+        </div>
+
+        <div class="charts-container">
+            <div class="chart-panel">
+                <div class="chart-title">Roll Error Timeline</div>
+                <canvas id="rollChart"></canvas>
+            </div>
+            
+            <div class="chart-panel">
+                <div class="chart-title">Pitch Error Timeline</div>
+                <canvas id="pitchChart"></canvas>
+            </div>
+            
+            <div class="chart-panel">
+                <div class="chart-title">Yaw Error Timeline</div>
+                <canvas id="yawChart"></canvas>
+            </div>
+            
+            <div class="chart-panel">
+                <div class="chart-title">Error Correlation Analysis</div>
+                <canvas id="correlationChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Advanced Error Analysis System
+        class DroneErrorAnalyzer {
+            constructor() {
+                this.errorHistory = {
+                    roll: [], pitch: [], yaw: []
+                };
+                this.peaks = { roll: 0, pitch: 0, yaw: 0 };
+                this.spikeCounts = { roll: 0, pitch: 0, yaw: 0 };
+                this.lastValues = { roll: 0, pitch: 0, yaw: 0 };
+                this.eventTimelines = { roll: [], pitch: [], yaw: [] };
+                
+                // Error thresholds for different severity levels
+                this.thresholds = {
+                    safe: 0.03,       // < 0.03 rad (~1.7°)
+                    warning: 0.08,    // 0.03-0.08 rad (~1.7-4.6°)
+                    danger: 0.15,     // 0.08-0.15 rad (~4.6-8.6°)
+                    critical: 0.25    // > 0.15 rad (~8.6°)
+                };
+                
+                // Initialize charts
+                this.initializeCharts();
+                
+                // Start error monitoring
+                this.startMonitoring();
+            }
+            
+            analyzeError(type, currentError, timestamp) {
+                const history = this.errorHistory[type];
+                history.push({ value: currentError, time: timestamp });
+                
+                // Keep only last 100 points
+                if (history.length > 100) {
+                    history.shift();
+                }
+                
+                // Update peak error
+                if (Math.abs(currentError) > Math.abs(this.peaks[type])) {
+                    this.peaks[type] = currentError;
+                }
+                
+                // Calculate error rate (change per second)
+                let errorRate = 0;
+                if (history.length > 1) {
+                    const prev = history[history.length - 2];
+                    const timeDiff = timestamp - prev.time;
+                    if (timeDiff > 0) {
+                        errorRate = Math.abs(currentError - prev.value) / timeDiff;
+                    }
+                }
+                
+                // Detect spikes (sudden large changes)
+                if (errorRate > 0.1) { // Threshold for spike detection
+                    this.spikeCounts[type]++;
+                    this.addTimelineEvent(type, timestamp, 'spike');
+                }
+                
+                // Determine severity level
+                const absError = Math.abs(currentError);
+                let severity = 'safe';
+                if (absError > this.thresholds.critical) {
+                    severity = 'critical';
+                } else if (absError > this.thresholds.danger) {
+                    severity = 'danger';
+                } else if (absError > this.thresholds.warning) {
+                    severity = 'warning';
+                }
+                
+                // Calculate component risks
+                const componentRisks = this.calculateComponentRisk(type, absError, errorRate);
+                
+                // Update UI
+                this.updateErrorPanel(type, {
+                    currentError,
+                    peak: this.peaks[type],
+                    errorRate,
+                    spikes: this.spikeCounts[type],
+                    severity,
+                    componentRisks,
+                    consequences: this.getConsequences(type, severity, absError)
+                });
+                
+                // Show critical alerts
+                if (severity === 'critical') {
+                    this.showCriticalAlert(type, absError);
+                }
+                
+                return { severity, componentRisks };
+            }
+            
+            calculateComponentRisk(type, errorValue, errorRate) {
+                const baseRisk = Math.min(errorValue * 100, 100); // Convert to percentage
+                const rateMultiplier = 1 + (errorRate * 10); // Rate increases risk
+                
+                let risks = {};
+                
+                switch(type) {
+                    case 'roll':
+                        risks.motor = Math.min(baseRisk * 1.2 * rateMultiplier, 100);
+                        risks.imu = Math.min(baseRisk * 0.8 * rateMultiplier, 100);
+                        risks.esc = Math.min(baseRisk * 0.9 * rateMultiplier, 100);
+                        break;
+                    case 'pitch':
+                        risks.motor = Math.min(baseRisk * 1.1 * rateMultiplier, 100);
+                        risks.imu = Math.min(baseRisk * 0.7 * rateMultiplier, 100);
+                        risks.battery = Math.min(baseRisk * 0.6 * rateMultiplier, 100);
+                        break;
+                    case 'yaw':
+                        risks.motor = Math.min(baseRisk * 1.0 * rateMultiplier, 100);
+                        risks.gyro = Math.min(baseRisk * 0.9 * rateMultiplier, 100);
+                        risks.compass = Math.min(baseRisk * 0.8 * rateMultiplier, 100);
+                        break;
+                }
+                
+                return risks;
+            }
+            
+            getConsequences(type, severity, errorValue) {
+                const consequences = {
+                    roll: {
+                        safe: "Stable lateral control maintained",
+                        warning: "Minor lateral oscillations - flight stability affected",
+                        danger: "Significant lateral drift - manual intervention recommended",
+                        critical: "CRITICAL: Uncontrolled rolling motion - immediate landing required!"
+                    },
+                    pitch: {
+                        safe: "Stable forward/backward control maintained",
+                        warning: "Minor pitch oscillations - altitude control affected",
+                        danger: "Dangerous pitch instability - risk of nose dive or climb",
+                        critical: "CRITICAL: Pitch runaway detected - emergency landing protocol!"
+                    },
+                    yaw: {
+                        safe: "Stable rotational control maintained",
+                        warning: "Minor yaw drift - heading accuracy reduced",
+                        danger: "Severe yaw instability - navigation compromised",
+                        critical: "CRITICAL: Uncontrolled spinning - complete loss of orientation!"
+                    }
+                };
+                
+                return consequences[type][severity];
+            }
+            
+            addTimelineEvent(type, timestamp, eventType) {
+                const timeline = this.eventTimelines[type];
+                const event = {
+                    time: timestamp,
+                    type: eventType,
+                    description: this.getEventDescription(eventType, type)
+                };
+                
+                timeline.push(event);
+                
+                // Keep only last 5 events
+                if (timeline.length > 5) {
+                    timeline.shift();
+                }
+                
+                this.updateTimeline(type);
+            }
+            
+            getEventDescription(eventType, axis) {
+                const descriptions = {
+                    spike: `${axis.toUpperCase()} error spike detected`,
+                    threshold: `${axis.toUpperCase()} error threshold exceeded`,
+                    recovery: `${axis.toUpperCase()} error normalized`,
+                    critical: `CRITICAL ${axis.toUpperCase()} error - immediate attention required`
+                };
+                
+                return descriptions[eventType] || 'Unknown event';
+            }
+            
+            updateErrorPanel(type, data) {
+                // Update metrics
+                document.getElementById(`${type}Error`).textContent = data.currentError.toFixed(3);
+                document.getElementById(`${type}Peak`).textContent = data.peak.toFixed(3);
+                document.getElementById(`${type}Rate`).textContent = data.errorRate.toFixed(3) + '/s';
+                document.getElementById(`${type}Spikes`).textContent = data.spikes;
+                
+                // Update status
+                const statusEl = document.getElementById(`${type}Status`);
+                const panelEl = document.getElementById(`${type}Panel`);
+                
+                statusEl.textContent = data.severity.toUpperCase();
+                statusEl.className = `error-status status-${data.severity}`;
+                panelEl.className = `error-panel ${data.severity}`;
+                
+                // Update consequences
+                document.getElementById(`${type}Consequence`).textContent = data.consequences;
+                
+                // Update component risks
+                this.updateComponentRisks(type, data.componentRisks);
+            }
+            
+            updateComponentRisks(type, risks) {
+                Object.keys(risks).forEach(component => {
+                    const risk = risks[component];
+                    const riskEl = document.getElementById(`${type}${component.charAt(0).toUpperCase() + component.slice(1)}Risk`);
+                    const percentEl = document.getElementById(`${type}${component.charAt(0).toUpperCase() + component.slice(1)}Percent`);
+                    
+                    if (riskEl && percentEl) {
+                        riskEl.style.width = risk + '%';
+                        percentEl.textContent = Math.round(risk) + '%';
+                        
+                        // Color based on risk level
+                        let color;
+                        if (risk < 20) {
+                            color = 'linear-gradient(90deg, #00ff88, #40e0d0)';
+                        } else if (risk < 50) {
+                            color = 'linear-gradient(90deg, #ffaa00, #ff8800)';
+                        } else if (risk < 80) {
+                            color = 'linear-gradient(90deg, #ff4444, #ff6666)';
+                        } else {
+                            color = 'linear-gradient(90deg, #ff0080, #ff3399)';
+                            riskEl.classList.add('animate');
+                        }
+                        
+                        riskEl.style.background = color;
+                    }
+                });
+            }
+            
+            updateTimeline(type) {
+                const timelineEl = document.getElementById(`${type}Timeline`);
+                const events = this.eventTimelines[type];
+                
+                if (events.length === 0) {
+                    timelineEl.textContent = 'System stable - no critical events';
+                } else {
+                    const eventStrings = events.map(event => {
+                        const timeStr = new Date(event.time * 1000).toLocaleTimeString();
+                        return `${timeStr}: ${event.description}`;
+                    });
+                    timelineEl.innerHTML = eventStrings.join('<br>');
+                }
+            }
+            
+            showCriticalAlert(type, errorValue) {
+                const toast = document.getElementById('notificationToast');
+                const title = document.getElementById('toastTitle');
+                const message = document.getElementById('toastMessage');
+                
+                title.textContent = `CRITICAL ${type.toUpperCase()} ERROR`;
+                message.textContent = `Error magnitude: ${errorValue.toFixed(3)} rad. Immediate action required to prevent system failure!`;
+                
+                toast.classList.add('show');
+                
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 5000);
+            }
+            
+            initializeCharts() {
+                // Chart configuration
+                const chartConfig = {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: { display: true, text: 'Time (s)', color: '#40e0d0' },
+                            grid: { color: 'rgba(64, 224, 255, 0.1)' },
+                            ticks: { color: '#40e0d0' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Error (rad)', color: '#40e0d0' },
+                            grid: { color: 'rgba(64, 224, 255, 0.1)' },
+                            ticks: { color: '#40e0d0' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: { color: '#40e0d0' }
+                        }
+                    },
+                    animation: { duration: 0 }
+                };
+                
+                // Roll chart
+                this.charts.roll = new Chart(document.getElementById('rollChart'), {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Roll Error',
+                            borderColor: '#ff6b6b',
+                            backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                            data: [],
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: chartConfig
+                });
+                
+                // Pitch chart
+                this.charts.pitch = new Chart(document.getElementById('pitchChart'), {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Pitch Error',
+                            borderColor: '#4ecdc4',
+                            backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                            data: [],
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: chartConfig
+                });
+                
+                // Yaw chart
+                this.charts.yaw = new Chart(document.getElementById('yawChart'), {
+                    type: 'line',
+                    data: {
+                        datasets: [{
+                            label: 'Yaw Error',
+                            borderColor: '#45b7d1',
+                            backgroundColor: 'rgba(69, 183, 209, 0.1)',
+                            data: [],
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: chartConfig
+                });
+                
+                // Correlation chart
+                this.charts.correlation = new Chart(document.getElementById('correlationChart'), {
+                    type: 'scatter',
+                    data: {
+                        datasets: [
+                            {
+                                label: 'Roll vs Pitch',
+                                borderColor: '#ff6b6b',
+                                backgroundColor: 'rgba(255, 107, 107, 0.6)',
+                                data: []
+                            },
+                            {
+                                label: 'Roll vs Yaw',
+                                borderColor: '#4ecdc4',
+                                backgroundColor: 'rgba(78, 205, 196, 0.6)',
+                                data: []
+                            },
+                            {
+                                label: 'Pitch vs Yaw',
+                                borderColor: '#45b7d1',
+                                backgroundColor: 'rgba(69, 183, 209, 0.6)',
+                                data: []
+                            }
+                        ]
+                    },
+                    options: {
+                        ...chartConfig,
+                        scales: {
+                            x: {
+                                title: { display: true, text: 'Primary Error (rad)', color: '#40e0d0' },
+                                grid: { color: 'rgba(64, 224, 255, 0.1)' },
+                                ticks: { color: '#40e0d0' }
+                            },
+                            y: {
+                                title: { display: true, text: 'Secondary Error (rad)', color: '#40e0d0' },
+                                grid: { color: 'rgba(64, 224, 255, 0.1)' },
+                                ticks: { color: '#40e0d0' }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            updateChart(type, errorValue, timestamp) {
+                const chart = this.charts[type];
+                if (!chart) return;
+                
+                chart.data.datasets[0].data.push({
+                    x: timestamp,
+                    y: errorValue
+                });
+                
+                // Keep only last 100 points
+                if (chart.data.datasets[0].data.length > 100) {
+                    chart.data.datasets[0].data.shift();
+                }
+                
+                chart.update('none');
+            }
+            
+            updateCorrelationChart(rollError, pitchError, yawError) {
+                const chart = this.charts.correlation;
+                
+                // Roll vs Pitch
+                chart.data.datasets[0].data.push({ x: rollError, y: pitchError });
+                // Roll vs Yaw
+                chart.data.datasets[1].data.push({ x: rollError, y: yawError });
+                // Pitch vs Yaw
+                chart.data.datasets[2].data.push({ x: pitchError, y: yawError });
+                
+                // Keep only last 50 points for scatter plot
+                chart.data.datasets.forEach(dataset => {
+                    if (dataset.data.length > 50) {
+                        dataset.data.shift();
+                    }
+                });
+                
+                chart.update('none');
+            }
+            
+            startMonitoring() {
+                // Simulate real-time error monitoring
+                setInterval(() => {
+                    const timestamp = Date.now() / 1000;
+                    
+                    // Simulate ML prediction errors
+                    const rollError = (Math.random() - 0.5) * 0.1 + Math.sin(timestamp * 0.1) * 0.05;
+                    const pitchError = (Math.random() - 0.5) * 0.08 + Math.cos(timestamp * 0.15) * 0.03;
+                    const yawError = (Math.random() - 0.5) * 0.12 + Math.sin(timestamp * 0.2) * 0.04;
+                    
+                    // Analyze each error
+                    this.analyzeError('roll', rollError, timestamp);
+                    this.analyzeError('pitch', pitchError, timestamp);
+                    this.analyzeError('yaw', yawError, timestamp);
+                    
+                    // Update charts
+                    this.updateChart('roll', rollError, timestamp);
+                    this.updateChart('pitch', pitchError, timestamp);
+                    this.updateChart('yaw', yawError, timestamp);
+                    this.updateCorrelationChart(rollError, pitchError, yawError);
+                    
+                    // Update general status
+                    this.updateGeneralStatus();
+                    
+                }, 100); // Update every 100ms
+            }
+            
+            updateGeneralStatus() {
+                // Update connection status
+                document.getElementById('connectionIndicator').className = 'connection-indicator connected';
+                document.getElementById('connectionIndicator').textContent = 'ML Analysis Active';
+                document.getElementById('connStatus').textContent = 'Active';
+                
+                // Simulate other metrics
+                document.getElementById('simTime').textContent = (Date.now() / 1000 % 10000).toFixed(1);
+                document.getElementById('altitude').textContent = (10 + Math.sin(Date.now() / 5000) * 2).toFixed(2);
+                document.getElementById('roll').textContent = (Math.sin(Date.now() / 3000) * 15).toFixed(1);
+                document.getElementById('pitch').textContent = (Math.cos(Date.now() / 4000) * 10).toFixed(1);
+                document.getElementById('yaw').textContent = ((Date.now() / 1000) % 360).toFixed(1);
+                document.getElementById('stability').textContent = (0.8 + Math.random() * 0.2).toFixed(3);
+                document.getElementById('mlActive').textContent = 'Yes';
+            }
+        }
+        
+        // WebSocket connection for real drone data
+        class DroneConnection {
+            constructor(analyzer) {
+                this.analyzer = analyzer;
+                this.ws = null;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 10;
+                this.isConnected = false;
+            }
+            
+            connect() {
+                try {
+                    this.ws = new WebSocket('ws://localhost:8765');
+                    
+                    this.ws.onopen = () => {
+                        console.log('Connected to drone data stream');
+                        this.isConnected = true;
+                        this.reconnectAttempts = 0;
+                        document.getElementById('connectionIndicator').className = 'connection-indicator connected';
+                        document.getElementById('connectionIndicator').textContent = 'Drone Connected';
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.processDroneData(data);
+                        } catch (error) {
+                            console.error('Error parsing drone data:', error);
+                        }
+                    };
+                    
+                    this.ws.onclose = () => {
+                        console.log('Disconnected from drone');
+                        this.isConnected = false;
+                        document.getElementById('connectionIndicator').className = 'connection-indicator disconnected';
+                        document.getElementById('connectionIndicator').textContent = 'Drone Disconnected';
+                        
+                        // Attempt reconnection
+                        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                            this.reconnectAttempts++;
+                            setTimeout(() => this.connect(), 2000);
+                        }
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                    };
+                    
+                } catch (error) {
+                    console.error('Failed to create WebSocket connection:', error);
+                    // Fall back to simulation mode
+                    this.startSimulationMode();
+                }
+            }
+            
+            processDroneData(data) {
+                if (!data) return;
+                
+                const timestamp = data.simulation_time || Date.now() / 1000;
+                
+                // Extract ML prediction errors
+                const rollError = data.ml_roll_error || 0;
+                const pitchError = data.ml_pitch_error || 0;
+                const yawError = data.ml_yaw_error || 0;
+                
+                // Analyze errors
+                this.analyzer.analyzeError('roll', rollError, timestamp);
+                this.analyzer.analyzeError('pitch', pitchError, timestamp);
+                this.analyzer.analyzeError('yaw', yawError, timestamp);
+                
+                // Update charts
+                this.analyzer.updateChart('roll', rollError, timestamp);
+                this.analyzer.updateChart('pitch', pitchError, timestamp);
+                this.analyzer.updateChart('yaw', yawError, timestamp);
+                this.analyzer.updateCorrelationChart(rollError, pitchError, yawError);
+                
+                // Update dashboard status
+                this.updateDashboardStatus(data);
+            }
+            
+            updateDashboardStatus(data) {
+                const safeValue = (value, fallback = 0) => {
+                    return (value !== undefined && value !== null && !isNaN(value)) ? value : fallback;
+                };
+                
+                document.getElementById('simTime').textContent = safeValue(data.simulation_time).toFixed(1);
+                document.getElementById('altitude').textContent = safeValue(data.altitude).toFixed(2);
+                document.getElementById('roll').textContent = (safeValue(data.filtered_roll) * 57.2958).toFixed(1);
+                document.getElementById('pitch').textContent = (safeValue(data.filtered_pitch) * 57.2958).toFixed(1);
+                document.getElementById('yaw').textContent = (safeValue(data.filtered_yaw) * 57.2958).toFixed(1);
+                document.getElementById('stability').textContent = safeValue(data.stability_index).toFixed(3);
+                document.getElementById('mlActive').textContent = 'Yes';
+                document.getElementById('connStatus').textContent = 'Connected';
+            }
+            
+            startSimulationMode() {
+                console.log('Starting simulation mode - no real drone connection');
+                // The analyzer will handle simulation in its startMonitoring method
+            }
+        }
+        
+        // Initialize the system
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Initializing Advanced Drone Error Analysis Dashboard...');
+            
+            const analyzer = new DroneErrorAnalyzer();
+            const connection = new DroneConnection(analyzer);
+            
+            // Try to connect to real drone, fall back to simulation
+            connection.connect();
+            
+            // Add keyboard shortcuts
+            document.addEventListener('keydown', function(event) {
+                if (event.ctrlKey) {
+                    switch(event.key) {
+                        case 'r':
+                            event.preventDefault();
+                            console.log('Reconnecting to drone...');
+                            connection.connect();
+                            break;
+                        case 'c':
+                            event.preventDefault();
+                            console.log('Clearing error history...');
+                            analyzer.errorHistory = { roll: [], pitch: [], yaw: [] };
+                            analyzer.peaks = { roll: 0, pitch: 0, yaw: 0 };
+                            analyzer.spikeCounts = { roll: 0, pitch: 0, yaw: 0 };
+                            break;
+                        case 'e':
+                            event.preventDefault();
+                            console.log('Triggering emergency simulation...');
+                            // Simulate critical error
+                            const criticalError = 0.3; // Above critical threshold
+                            analyzer.analyzeError('roll', criticalError, Date.now() / 1000);
+                            break;
+                    }
+                }
+            });
+            
+            console.log('Dashboard initialized successfully!');
+            console.log('Keyboard shortcuts: Ctrl+R (reconnect), Ctrl+C (clear), Ctrl+E (emergency test)');
+        });
+    </script>
+</body>
+</html>
